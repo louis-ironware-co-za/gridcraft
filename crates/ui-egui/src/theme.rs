@@ -297,7 +297,26 @@ impl Tokens {
     }
 
     pub fn get(ctx: &egui::Context) -> Tokens {
-        if ctx.global_style().visuals.dark_mode { Tokens::dark() } else { Tokens::light() }
+        let t = if ctx.global_style().visuals.dark_mode { Tokens::dark() } else { Tokens::light() };
+        match host_accent(ctx) {
+            Some(accent) => t.with_accent(accent),
+            None => t,
+        }
+    }
+
+    /// These tokens with a host's accent in place of GridCraft's green: the accent itself, a darker
+    /// shade for pressed states, a soft tint of it on the window for selected items, and white or
+    /// near-black on it, whichever reads. The sheet's own colours (cell selection) stay as they are.
+    pub fn with_accent(mut self, accent: Color32) -> Tokens {
+        let mix = |a: Color32, b: Color32, share: f32| {
+            let m = |x: u8, y: u8| (f32::from(x) + (f32::from(y) - f32::from(x)) * share).round() as u8;
+            Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
+        };
+        self.accent = accent;
+        self.accent_dark = mix(accent, if self.dark { Color32::WHITE } else { Color32::BLACK }, 0.25);
+        self.accent_soft = mix(self.window, accent, if self.dark { 0.30 } else { 0.14 });
+        self.on_accent = if contrast(Color32::WHITE, accent) >= 3.0 { Color32::WHITE } else { rgb(0x1F1F1F) };
+        self
     }
 
     /// One colour of the category palette.
@@ -327,12 +346,52 @@ pub fn contrast(a: Color32, b: Color32) -> f32 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
+/// Where a host's accent is kept: on the context, so each window (and each test) has its own.
+fn host_accent_id() -> egui::Id {
+    egui::Id::unique("gridcraft.host_accent")
+}
+
+/// The accent a host asked for (`ui.set {"accent": "#RRGGBB"}`), if any.
+pub fn host_accent(ctx: &egui::Context) -> Option<Color32> {
+    ctx.data(|d| d.get_temp::<Color32>(host_accent_id()))
+}
+
+/// Sets (or, with `None`, clears) a host's accent - SARS-Logbook's theme blue in place of
+/// GridCraft's green (2026-11-13) - and reinstalls the visuals that carry it. Not a preference,
+/// so not saved: it describes the host.
+pub fn set_host_accent(ctx: &egui::Context, accent: Option<Color32>, dark: bool) {
+    ctx.data_mut(|d| match accent {
+        Some(c) => {
+            d.insert_temp(host_accent_id(), c);
+        }
+        None => {
+            d.remove::<Color32>(host_accent_id());
+        }
+    });
+    apply(ctx, dark);
+}
+
+/// `#RRGGBB` (or `RRGGBB`) as a colour.
+pub fn parse_hex(text: &str) -> Option<Color32> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let v = u32::from_str_radix(hex, 16).ok()?;
+    Some(Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8))
+}
+
 /// Installs light and dark token visuals in both theme slots, keeps the 2-3 px widget and 8-10 px window/menu corner radii from 0.36, and sets spacing, text styles and the active theme.
 pub fn apply(ctx: &egui::Context, dark: bool) {
+    let accent = host_accent(ctx);
     // Install both palettes before System can switch between the style slots.
     for theme in [egui::Theme::Light, egui::Theme::Dark] {
         let dark = theme == egui::Theme::Dark;
         let t = if dark { Tokens::dark() } else { Tokens::light() };
+        let t = match accent {
+            Some(a) => t.with_accent(a),
+            None => t,
+        };
         let mut v = if dark { Visuals::dark() } else { Visuals::light() };
         v.panel_fill = t.window;
         v.window_fill = t.menu_bg;

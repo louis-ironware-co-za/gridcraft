@@ -42,6 +42,40 @@ fn a_host_can_leave_out_the_title_bar_and_the_file_tab() {
 }
 
 #[test]
+fn a_host_can_give_its_own_accent_in_place_of_the_green() {
+    // SARS-Logbook (2026-11-13): "Change this green to match the SLB theme" - the File page's
+    // side panel, links and selected items take the host's accent; null brings the green back.
+    let mut h = harness(Chrome::default());
+    let ctx = h.ctx.clone();
+    let green = gridcraft_ui_egui::theme::Tokens::get(&ctx).accent;
+    let set = |h: &mut egui_kittest::Harness<'static, SheetApp>, accent: serde_json::Value| match gridcraft_ui_egui::control::handle(
+        h.state_mut(),
+        &ctx,
+        "ui.set",
+        &serde_json::json!({ "accent": accent }),
+    ) {
+        gridcraft_ui_egui::control::Outcome::Done(v) => v,
+        gridcraft_ui_egui::control::Outcome::Screenshot { .. } => serde_json::Value::Null,
+    };
+
+    let reply = set(&mut h, serde_json::json!("#4E6D9C"));
+    h.run_steps(3);
+    let blue = egui::Color32::from_rgb(0x4E, 0x6D, 0x9C);
+    let t = gridcraft_ui_egui::theme::Tokens::get(&ctx);
+    assert_eq!(reply["result"]["accent"], serde_json::json!("#4E6D9C"), "{reply}");
+    assert_eq!(t.accent, blue, "the accent is the host's");
+    assert_eq!(t.on_accent, egui::Color32::WHITE, "white reads on that blue");
+    assert_eq!(ctx.global_style().visuals.hyperlink_color, blue, "links (Page Setup...) take it too");
+
+    let bad = set(&mut h, serde_json::json!("blue"));
+    assert_eq!(bad["ok"], serde_json::json!(false), "a colour that is not #RRGGBB is refused: {bad}");
+
+    set(&mut h, serde_json::Value::Null);
+    h.run_steps(3);
+    assert_eq!(gridcraft_ui_egui::theme::Tokens::get(&ctx).accent, green, "null brings GridCraft's green back");
+}
+
+#[test]
 fn without_the_file_tab_the_backstage_view_never_opens() {
     let mut h = harness(Chrome { file_tab: false, ..Chrome::default() });
     h.state_mut().open_backstage(Page::Home);

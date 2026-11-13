@@ -324,11 +324,22 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
             if let Some(v) = p.get("fileClose").and_then(Json::as_bool) {
                 app.chrome.file_close = v;
             }
+            // A host's accent, "#RRGGBB", in place of GridCraft's green; null goes back to green.
+            match p.get("accent") {
+                Some(Json::String(hex)) => match crate::theme::parse_hex(hex) {
+                    Some(c) => crate::theme::set_host_accent(ctx, Some(c), app.ui.dark),
+                    None => return err(format!("accent {hex:?} is not #RRGGBB")),
+                },
+                Some(Json::Null) => crate::theme::set_host_accent(ctx, None, app.ui.dark),
+                _ => {}
+            }
             let mut out = serde_json::to_value(&app.ui).unwrap_or_default();
             if let Some(o) = out.as_object_mut() {
                 o.insert("formulaBar".into(), json!(app.session.prefs.formula_bar));
                 o.insert("ribbon".into(), json!(app.chrome.ribbon));
                 o.insert("fileClose".into(), json!(app.chrome.file_close));
+                let accent = crate::theme::host_accent(ctx).map(|c| format!("#{:02X}{:02X}{:02X}", c.r(), c.g(), c.b()));
+                o.insert("accent".into(), json!(accent));
             }
             ok(out)
         }
