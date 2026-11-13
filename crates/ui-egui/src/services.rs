@@ -64,10 +64,14 @@ pub struct Chrome {
     /// The ribbon: its tabs, groups and keytips. A host with commands of its own can leave it out;
     /// the formula bar, the grid, keyboard shortcuts and Backstage (`ui.backstage`) stay.
     pub ribbon: bool,
+    /// Close on the Backstage view's left: it closes the workbook. A host that owns the workbook
+    /// (and opens it itself) leaves it out, so a way back from Print never closes the file and
+    /// asks to save it. Back, Escape and `ui.backstage {"page": "close"}` still leave the view.
+    pub file_close: bool,
 }
 
 impl Default for Chrome {
     fn default() -> Self {
-        Chrome { title_bar: true, file_tab: true, ribbon: true }
+        Chrome { title_bar: true, file_tab: true, ribbon: true, file_close: true }
     }
 }

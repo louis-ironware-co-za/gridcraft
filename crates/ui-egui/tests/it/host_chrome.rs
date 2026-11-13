@@ -31,7 +31,7 @@ fn the_title_bar_and_file_tab_are_drawn_by_default() {
 #[test]
 fn a_host_can_leave_out_the_title_bar_and_the_file_tab() {
     let full = harness(Chrome::default());
-    let h = harness(Chrome { title_bar: false, file_tab: false, ribbon: true });
+    let h = harness(Chrome { title_bar: false, file_tab: false, ..Chrome::default() });
     assert!(h.query_by_label("AutoSave").is_none(), "no title bar");
     assert!(h.query_by_label("File").is_none(), "no File tab");
     // The ribbon tabs are painted text, so measure the move with the first ribbon control.
@@ -43,7 +43,7 @@ fn a_host_can_leave_out_the_title_bar_and_the_file_tab() {
 
 #[test]
 fn without_the_file_tab_the_backstage_view_never_opens() {
-    let mut h = harness(Chrome { title_bar: true, file_tab: false, ribbon: true });
+    let mut h = harness(Chrome { file_tab: false, ..Chrome::default() });
     h.state_mut().open_backstage(Page::Home);
     h.run_steps(3);
     assert!(h.state().backstage.is_none(), "opening Backstage directly is ignored");
@@ -73,6 +73,32 @@ fn a_host_can_leave_out_the_ribbon_and_keep_the_sheet() {
     // The grid moves up into the ribbon's place.
     let top = |h: &egui_kittest::Harness<'static, SheetApp>| h.state().grid.rect.map(|r| r.min.y).unwrap_or(f32::MAX);
     assert!(top(&h) + 60.0 < top(&full), "the grid starts higher without the ribbon: {} vs {}", top(&h), top(&full));
+}
+
+#[test]
+fn a_host_that_owns_the_workbook_can_leave_out_close_on_the_file_page() {
+    // SARS-Logbook (2026-11-13): closing its print preview with the Close beside Print closed the
+    // workbook and asked to save it. A host that owns the workbook turns Close off.
+    let mut full = harness(Chrome::default());
+    full.state_mut().open_backstage(Page::Print);
+    full.run_steps(3);
+    assert!(full.query_by_label("Close").is_some(), "Close is there by default");
+
+    let mut h = harness(Chrome { file_close: false, ..Chrome::default() });
+    h.state_mut().open_backstage(Page::Print);
+    h.run_steps(3);
+    assert!(h.state().backstage.is_some(), "the print page still opens");
+    assert!(h.query_by_label("Close").is_none(), "with no Close on it");
+    assert!(h.query_by_label("Back").is_some(), "Back is the way out");
+
+    let ctx = h.ctx.clone();
+    let reply = match gridcraft_ui_egui::control::handle(h.state_mut(), &ctx, "ui.set", &serde_json::json!({"fileClose": true})) {
+        gridcraft_ui_egui::control::Outcome::Done(v) => v,
+        gridcraft_ui_egui::control::Outcome::Screenshot { .. } => serde_json::Value::Null,
+    };
+    h.run_steps(3);
+    assert_eq!(reply["result"]["fileClose"], serde_json::json!(true), "{reply}");
+    assert!(h.query_by_label("Close").is_some(), "the control channel turns it back on");
 }
 
 #[test]

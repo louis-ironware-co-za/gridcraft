@@ -321,10 +321,14 @@ pub fn handle(app: &mut SheetApp, ctx: &egui::Context, method: &str, p: &Json) -
             if let Some(v) = p.get("ribbon").and_then(Json::as_bool) {
                 app.chrome.ribbon = v;
             }
+            if let Some(v) = p.get("fileClose").and_then(Json::as_bool) {
+                app.chrome.file_close = v;
+            }
             let mut out = serde_json::to_value(&app.ui).unwrap_or_default();
             if let Some(o) = out.as_object_mut() {
                 o.insert("formulaBar".into(), json!(app.session.prefs.formula_bar));
                 o.insert("ribbon".into(), json!(app.chrome.ribbon));
+                o.insert("fileClose".into(), json!(app.chrome.file_close));
             }
             ok(out)
         }

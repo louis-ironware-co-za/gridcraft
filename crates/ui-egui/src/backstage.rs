@@ -196,7 +196,8 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                     out.page = Some(page);
                 }
             }
-            if nav_item(ui, Icon::Close, lang.tr("Close"), false, nav_text, nav_sel).clicked() {
+            // A host that owns the workbook leaves Close out (`Chrome::file_close`).
+            if app.chrome.file_close && nav_item(ui, Icon::Close, lang.tr("Close"), false, nav_text, nav_sel).clicked() {
                 // A cell still being edited is part of the workbook; Close keeps the unsaved prompt.
                 if app.commit_edit(0, 0, false, false) {
                     app.run_or_alert("file.close", json!({}));
